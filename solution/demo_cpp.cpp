@@ -1,7 +1,7 @@
 #include <iostream>
 #include <string>
 #include <string_view>
-#include "log.h"
+#include "../log.h"
 
 static void test_cpp() {
     std::string level = "Debug";

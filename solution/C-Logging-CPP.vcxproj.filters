@@ -12,12 +12,12 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="log.h">
+    <ClInclude Include="..\\log.h">
       <Filter>Source Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <None Include="README.md">
+    <None Include="..\\README.md">
       <Filter>Source Files</Filter>
     </None>
   </ItemGroup>

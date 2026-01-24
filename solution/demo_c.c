@@ -1,5 +1,5 @@
 #include <stdio.h>
-#include "log.h"
+#include "../log.h"
 
 static void test(void) {
     log_msg("Debug", "Log from C function");
