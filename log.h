@@ -140,29 +140,69 @@ static inline const char* log_level_color(LogLevel level) {
 }
 
 // Enable ANSI color output on older Windows consoles.
-static inline int log_enable_vt(void) {
+static inline int log_enable_vt_handle(HANDLE out) {
 #if defined(LOG_NO_COLOR)
+    (void)out;
     return 1;
 #elif defined(_WIN32)
-    HANDLE out = GetStdHandle(STD_OUTPUT_HANDLE);
     if (out == INVALID_HANDLE_VALUE) return 0;
     DWORD mode = 0;
     if (!GetConsoleMode(out, &mode)) return 0;
     mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
     return SetConsoleMode(out, mode) ? 1 : 0;
 #else
+    (void)out;
     return 1;
+#endif
+}
+
+static inline int log_enable_vt(void) {
+#if defined(LOG_NO_COLOR)
+    return 1;
+#elif defined(_WIN32)
+    int ok_out = log_enable_vt_handle(GetStdHandle(STD_OUTPUT_HANDLE));
+    int ok_err = log_enable_vt_handle(GetStdHandle(STD_ERROR_HANDLE));
+    return (ok_out && ok_err) ? 1 : 0;
+#else
+    return 1;
+#endif
+}
+
+static inline void log_init_vt_once(void) {
+#if defined(LOG_NO_COLOR)
+    return;
+#elif defined(_WIN32)
+    static volatile LONG vt_inited = 0;
+    if (InterlockedCompareExchange(&vt_inited, 1, 0) == 0) {
+        (void)log_enable_vt();
+    }
+#endif
+}
+
+static inline void log_stream_lock(FILE* out) {
+#if defined(_MSC_VER)
+    _lock_file(out);
+#elif !defined(_WIN32)
+    flockfile(out);
+#else
+    (void)out;
+#endif
+}
+
+static inline void log_stream_unlock(FILE* out) {
+#if defined(_MSC_VER)
+    _unlock_file(out);
+#elif !defined(_WIN32)
+    funlockfile(out);
+#else
+    (void)out;
 #endif
 }
 
 static inline void log_msg_impl(const char* message, const char* level, const char* func) {
     if (message == NULL) message = "(null)";
 #if defined(_WIN32) && !defined(LOG_NO_COLOR)
-    static int vt_inited = 0;
-    if (!vt_inited) {
-        (void)log_enable_vt();
-        vt_inited = 1;
-    }
+    log_init_vt_once();
 #endif
     // Build timestamp in YYYY-MM-DD HH:MM:SS.sss.
     char time_buf[24];
@@ -244,6 +284,7 @@ static inline void log_msg_impl(const char* message, const char* level, const ch
     FILE* out = (parsed_level == LOG_LEVEL_WARN || parsed_level == LOG_LEVEL_ERROR) ? stderr : stdout;
 
     // time in blue, [function] default, message colored by level
+    log_stream_lock(out);
     (void)fprintf(
         out,
         LOG_COLOR_BLUE "%s" LOG_COLOR_RESET " "
@@ -254,6 +295,7 @@ static inline void log_msg_impl(const char* message, const char* level, const ch
         level_color,
         message
     );
+    log_stream_unlock(out);
 }
 
 // Helper macro to auto-pass the calling function name in C.
