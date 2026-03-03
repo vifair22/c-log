@@ -61,6 +61,10 @@ License (MIT):
 #ifndef LOG_H
 #define LOG_H
 
+#if !defined(_WIN32) && !defined(_POSIX_C_SOURCE)
+#define _POSIX_C_SOURCE 200809L
+#endif
+
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
@@ -69,9 +73,17 @@ License (MIT):
 #endif
 #if !defined(_WIN32)
 #include <sys/time.h>
+#if !defined(_MSC_VER)
+struct tm;
+struct tm* localtime_r(const time_t* timer, struct tm* result);
+void flockfile(FILE* stream);
+void funlockfile(FILE* stream);
+#endif
 #endif
 #if defined(_WIN32)
 #include <windows.h>
+#else
+typedef void* HANDLE;
 #endif
 
 // Define LOG_NO_COLOR to disable ANSI color output.
@@ -276,7 +288,7 @@ static inline void log_msg_impl(const char* message, const char* level, const ch
     }
 #endif
     if (!ok) {
-        (void)snprintf(time_buf, sizeof(time_buf), "????-??-?? ??:??:??.???");
+        (void)snprintf(time_buf, sizeof(time_buf), "0000-00-00 00:00:00.000");
     }
 
     LogLevel parsed_level = log_parse_level(level);
@@ -295,6 +307,7 @@ static inline void log_msg_impl(const char* message, const char* level, const ch
         level_color,
         message
     );
+    (void)fflush(out);
     log_stream_unlock(out);
 }
 
