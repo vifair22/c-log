@@ -201,6 +201,15 @@ static inline void log_stream_lock(FILE* out) {
 #endif
 }
 
+// Optional pre-write hook (e.g. to clear progress bars before logging).
+// Not thread-safe — set once during init before any logging calls.
+typedef void (*log_pre_write_fn)(FILE* out);
+static log_pre_write_fn g_log_pre_write = NULL;
+
+static inline void log_set_pre_write(log_pre_write_fn fn) {
+    g_log_pre_write = fn;
+}
+
 static inline void log_stream_unlock(FILE* out) {
 #if defined(_MSC_VER)
     _unlock_file(out);
@@ -297,6 +306,8 @@ static inline void log_msg_impl(const char* message, const char* level, const ch
 
     // time in blue, [function] default, message colored by level
     log_stream_lock(out);
+    if (g_log_pre_write)
+        g_log_pre_write(out);
     (void)fprintf(
         out,
         LOG_COLOR_BLUE "%s" LOG_COLOR_RESET " "
