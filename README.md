@@ -9,12 +9,13 @@ Small, header-only logging helper for C and C++ with colored output and timestam
 - Windows VT enable for older consoles
 - Optional `LOG_NO_COLOR` build flag
 
-## Demo projects (Visual Studio)
-The solution contains two console apps:
-- `C-Logging` (C demo) uses `demo_c.c`
-- `C-Logging-CPP` (C++ demo) uses `demo_cpp.cpp`
-
-Open `C-Logging.sln`, select the project you want to run, and build/debug.
+## Build & test
+```
+make test          # run unit tests
+make demo          # run C + C++ demos
+make demo-nocolor  # demos with LOG_NO_COLOR
+make analyze       # gcc -fanalyzer + cppcheck
+```
 
 ## C usage
 ```c
