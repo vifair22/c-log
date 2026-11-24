@@ -7,6 +7,7 @@ Small, header-only logging helper for C and C++ with colored output and timestam
 - Colorized levels (DEBUG/WARN/ERROR)
 - Case-insensitive level parsing
 - Windows VT enable for older consoles
+- Plain output when the stream is not a terminal, or when `NO_COLOR` is set
 - Optional `LOG_NO_COLOR` build flag
 
 ## Build & test
@@ -51,8 +52,14 @@ Minimums (core logging):
 - C: C99 (uses `__func__`).
 - C++: C++17 (the header includes `<string_view>`).
 
-## Disable color
-Define `LOG_NO_COLOR` at compile time:
+## Color
+Colors are written only when the stream is a terminal and `NO_COLOR` is unset
+or empty, so output captured by journald, a pipe or a file stays plain.
+Call `log_set_color_mode(LOG_COLOR_MODE_ALWAYS)` or `LOG_COLOR_MODE_NEVER` to
+override the check. The setting applies to the translation unit that makes the
+call.
+
+To compile colors out entirely, define `LOG_NO_COLOR`:
 - MSVC: `/DLOG_NO_COLOR`
 - GCC/Clang: `-DLOG_NO_COLOR`
 
