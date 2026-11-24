@@ -166,6 +166,51 @@ static void test_error_goes_to_stderr(void) {
     assert(strstr(buf, "route_test") != NULL);
 }
 
+/* ---- color mode ------------------------------------------------------ */
+
+static void test_color_mode_overrides(void) {
+    log_set_color_mode(LOG_COLOR_MODE_ALWAYS);
+    assert(log_stream_wants_color(stdout) == 1);
+    log_set_color_mode(LOG_COLOR_MODE_NEVER);
+    assert(log_stream_wants_color(stdout) == 0);
+    log_set_color_mode(LOG_COLOR_MODE_AUTO);
+}
+
+static void test_color_auto_plain_when_not_a_terminal(void) {
+    FILE* tmp = tmpfile();
+    assert(tmp != NULL);
+    assert(unsetenv("NO_COLOR") == 0);
+    assert(log_stream_wants_color(tmp) == 0);
+    fclose(tmp);
+}
+
+static void test_color_auto_honours_no_color(void) {
+    log_set_color_mode(LOG_COLOR_MODE_AUTO);
+    assert(setenv("NO_COLOR", "1", 1) == 0);
+    assert(log_stream_wants_color(stdout) == 0);
+    /* An empty NO_COLOR does not count as set. */
+    assert(setenv("NO_COLOR", "", 1) == 0);
+    assert(log_stream_wants_color(stdout) == (isatty(fileno(stdout)) ? 1 : 0));
+    assert(unsetenv("NO_COLOR") == 0);
+}
+
+static void test_captured_output_has_no_escapes(void) {
+    char buf[512];
+    log_set_color_mode(LOG_COLOR_MODE_AUTO);
+    capture_stream(stdout, emit_info, buf, sizeof(buf));
+    assert(strchr(buf, '\x1b') == NULL);
+    assert(strstr(buf, "route_test") != NULL);
+}
+
+static void test_forced_color_has_escapes(void) {
+    char buf[512];
+    log_set_color_mode(LOG_COLOR_MODE_ALWAYS);
+    capture_stream(stderr, emit_error, buf, sizeof(buf));
+    log_set_color_mode(LOG_COLOR_MODE_AUTO);
+    assert(strstr(buf, LOG_COLOR_RED) != NULL);
+    assert(strstr(buf, LOG_COLOR_RESET) != NULL);
+}
+
 /* ---- timestamp format ------------------------------------------------ */
 
 static void test_timestamp_format(void) {
@@ -222,6 +267,11 @@ int main(void) {
     RUN(test_debug_goes_to_stdout);
     RUN(test_warn_goes_to_stderr);
     RUN(test_error_goes_to_stderr);
+    RUN(test_color_mode_overrides);
+    RUN(test_color_auto_plain_when_not_a_terminal);
+    RUN(test_color_auto_honours_no_color);
+    RUN(test_captured_output_has_no_escapes);
+    RUN(test_forced_color_has_escapes);
     RUN(test_timestamp_format);
     RUN(test_enable_vt);
 

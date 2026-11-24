@@ -28,11 +28,12 @@ Log levels (case-insensitive):
 
 Output format:
   YYYY-MM-DD HH:MM:SS.sss [function] message
-  - Timestamp in blue, message colored by level (unless LOG_NO_COLOR is defined).
+  - Timestamp in blue, message colored by level, only when the stream is a
+    terminal and NO_COLOR is unset or empty (see log_set_color_mode).
   - WARN/ERROR go to stderr; INFO/DEBUG go to stdout.
 
 Build options:
-  - Define LOG_NO_COLOR to disable ANSI colors.
+  - Define LOG_NO_COLOR to compile ANSI colors out entirely.
   - Windows consoles: VT is enabled automatically on first log call.
 
 License (MIT):
@@ -78,7 +79,18 @@ struct tm;
 struct tm* localtime_r(const time_t* timer, struct tm* result);
 void flockfile(FILE* stream);
 void funlockfile(FILE* stream);
+#if !defined(__cplusplus)
+/* Declared here because <stdio.h> hides it when it was included before
+   _POSIX_C_SOURCE was defined. */
+int fileno(FILE* stream);
 #endif
+#endif
+#endif
+#include <stdlib.h>
+#if defined(_WIN32)
+#include <io.h>
+#else
+#include <unistd.h>
 #endif
 #if defined(_WIN32)
 #include <windows.h>
@@ -210,6 +222,39 @@ static inline void log_set_pre_write(log_pre_write_fn fn) {
     g_log_pre_write = fn;
 }
 
+// Color decision. AUTO colors a stream only when it is a terminal and NO_COLOR
+// (https://no-color.org) is unset or empty, so output captured by journald,
+// a pipe or a file stays plain. ALWAYS and NEVER override the check.
+// The setting is per translation unit, like the pre-write hook.
+typedef enum LogColorMode {
+    LOG_COLOR_MODE_AUTO = 0,
+    LOG_COLOR_MODE_ALWAYS,
+    LOG_COLOR_MODE_NEVER
+} LogColorMode;
+static LogColorMode g_log_color_mode = LOG_COLOR_MODE_AUTO;
+
+static inline void log_set_color_mode(LogColorMode mode) {
+    g_log_color_mode = mode;
+}
+
+static inline int log_stream_wants_color(FILE* out) {
+#if defined(LOG_NO_COLOR)
+    (void)out;
+    return 0;
+#else
+    if (g_log_color_mode == LOG_COLOR_MODE_ALWAYS) return 1;
+    if (g_log_color_mode == LOG_COLOR_MODE_NEVER) return 0;
+    const char* no_color = getenv("NO_COLOR");
+    if (no_color != NULL && no_color[0] != '\0') return 0;
+    if (out == NULL) return 0;
+#if defined(_WIN32)
+    return _isatty(_fileno(out)) ? 1 : 0;
+#else
+    return isatty(fileno(out)) ? 1 : 0;
+#endif
+#endif
+}
+
 static inline void log_stream_unlock(FILE* out) {
 #if defined(_MSC_VER)
     _unlock_file(out);
@@ -301,8 +346,11 @@ static inline void log_msg_impl(const char* message, const char* level, const ch
     }
 
     LogLevel parsed_level = log_parse_level(level);
-    const char* level_color = log_level_color(parsed_level);
     FILE* out = (parsed_level == LOG_LEVEL_WARN || parsed_level == LOG_LEVEL_ERROR) ? stderr : stdout;
+    int color = log_stream_wants_color(out);
+    const char* time_color = color ? LOG_COLOR_BLUE : "";
+    const char* level_color = color ? log_level_color(parsed_level) : "";
+    const char* reset = color ? LOG_COLOR_RESET : "";
 
     // time in blue, [function] default, message colored by level
     log_stream_lock(out);
@@ -310,13 +358,14 @@ static inline void log_msg_impl(const char* message, const char* level, const ch
         g_log_pre_write(out);
     (void)fprintf(
         out,
-        LOG_COLOR_BLUE "%s" LOG_COLOR_RESET " "
-        "[%s]" " "
-        "%s%s" LOG_COLOR_RESET "\n",
+        "%s%s%s [%s] %s%s%s\n",
+        time_color,
         time_buf,
+        reset,
         func ? func : "?",
         level_color,
-        message
+        message,
+        reset
     );
     (void)fflush(out);
     log_stream_unlock(out);
